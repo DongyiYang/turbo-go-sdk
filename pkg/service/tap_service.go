@@ -104,7 +104,7 @@ func (builder *TAPServiceBuilder) WithTurboCommunicator(commConfig *TurboCommuni
 	// Create the mediation container. This is a singleton.
 	containerConfig := &mediationcontainer.MediationContainerConfig{
 		ServerMeta:      commConfig.ServerMeta,
-		WebSocketConfig: commConfig.WebSocketConfig,
+		TransportConfig: commConfig.TransportConfig,
 	}
 	mediationcontainer.CreateMediationContainer(containerConfig)
 

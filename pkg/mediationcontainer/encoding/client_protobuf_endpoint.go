@@ -1,31 +1,33 @@
-package mediationcontainer
+package encoding
 
 import (
 	"time"
+
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/transport"
 
 	"github.com/golang/glog"
 	goproto "github.com/golang/protobuf/proto"
 )
 
 // =====================================================================================================
-// Implementation of ProtobufEndpoint to handle all the server protobuf messages sent to the client
-type ClientProtobufEndpoint struct {
+// Implementation of ProtoBufEndpoint to handle all the server ProtoBuf messages sent to the client
+type ClientProtoBufEndpoint struct {
 	Name              string
 	singleMessageMode bool
 	// Transport used to send and receive messages
-	transport ITransport
+	transport transport.ITransport
 	// Parser for the message - this will vary with the type of message communication the endpoint is being used for
-	messageHandler ProtobufMessage
+	messageHandler ProtoBufMessage
 	// Channel where the endpoint will send the parsed messages
 	ParsedMessageChannel chan *ParsedMessage // unbuffered channel
 	// TODO: add message waiting policy
 	stopMsgWaitCh chan bool // buffered channel
 }
 
-// Create a new instance of the ClientProtobufEndpoint that handles communication
+// Create a new instance of the ClientProtoBufEndpoint that handles communication
 // for a specific message type using the given transport point
-func CreateClientProtoBufEndpoint(name string, transport ITransport, messageHandler ProtobufMessage, singleMessageMode bool) ProtobufEndpoint {
-	endpoint := &ClientProtobufEndpoint{
+func CreateClientProtoBufEndpoint(name string, transport transport.ITransport, messageHandler ProtoBufMessage, singleMessageMode bool) ProtoBufEndpoint {
+	endpoint := &ClientProtoBufEndpoint{
 		Name:                 name,
 		transport:            transport, // the transport
 		ParsedMessageChannel: make(chan *ParsedMessage),
@@ -47,23 +49,23 @@ func CreateClientProtoBufEndpoint(name string, transport ITransport, messageHand
 	return endpoint
 }
 
-func (endpoint *ClientProtobufEndpoint) GetName() string {
+func (endpoint *ClientProtoBufEndpoint) GetName() string {
 	return endpoint.Name
 }
 
-func (endpoint *ClientProtobufEndpoint) GetTransport() ITransport {
+func (endpoint *ClientProtoBufEndpoint) GetTransport() transport.ITransport {
 	return endpoint.transport
 }
 
-func (endpoint *ClientProtobufEndpoint) MessageReceiver() chan *ParsedMessage {
+func (endpoint *ClientProtoBufEndpoint) MessageReceiver() chan *ParsedMessage {
 	return endpoint.ParsedMessageChannel
 }
 
-func (endpoint *ClientProtobufEndpoint) GetMessageHandler() ProtobufMessage {
+func (endpoint *ClientProtoBufEndpoint) GetMessageHandler() ProtoBufMessage {
 	return endpoint.messageHandler
 }
 
-func (endpoint *ClientProtobufEndpoint) CloseEndpoint() {
+func (endpoint *ClientProtoBufEndpoint) CloseEndpoint() {
 	glog.V(4).Infof("[" + endpoint.Name + "] : closing endpoint and listener routine")
 	// Send close to the listener routine
 	if endpoint.stopMsgWaitCh != nil {
@@ -74,16 +76,16 @@ func (endpoint *ClientProtobufEndpoint) CloseEndpoint() {
 	}
 }
 
-func (endpoint *ClientProtobufEndpoint) Send(messageToSend *EndpointMessage) {
+func (endpoint *ClientProtoBufEndpoint) Send(messageToSend *EndpointMessage) {
 	glog.V(4).Infof("[%s] : Sending protobuf message", endpoint.Name) // %s", messageToSend.ProtobufMessage)
 	// Marshal protobuf message to raw bytes
-	msgMarshalled, err := goproto.Marshal(messageToSend.ProtobufMessage) // marshal to byte array
+	msgMarshalled, err := goproto.Marshal(messageToSend.ProtoBufMessage) // marshal to byte array
 	if err != nil {
 		glog.Errorf("[ClientProtobufEndpoint] during send - marshaling error: ", err)
 		return
 	}
 	// Send using the underlying transport
-	tmsg := &TransportMessage{
+	tmsg := &transport.TransportMessage{
 		RawMsg: msgMarshalled,
 	}
 	err = endpoint.transport.Send(tmsg)
@@ -93,7 +95,7 @@ func (endpoint *ClientProtobufEndpoint) Send(messageToSend *EndpointMessage) {
 	}
 }
 
-func (endpoint *ClientProtobufEndpoint) waitForServerMessage() {
+func (endpoint *ClientProtoBufEndpoint) waitForServerMessage() {
 
 	logPrefix := "[" + endpoint.Name + "][[waitForServerMessage] : "
 	glog.V(4).Infof(logPrefix+" %s: ENTER  ", time.Now())
@@ -142,7 +144,7 @@ func (endpoint *ClientProtobufEndpoint) waitForServerMessage() {
 	glog.V(4).Infof(logPrefix + "DONE")
 }
 
-func (endpoint *ClientProtobufEndpoint) waitForSingleServerMessage() {
+func (endpoint *ClientProtoBufEndpoint) waitForSingleServerMessage() {
 	logPrefix := "[" + endpoint.Name + "][[waitForSingleServerMessage] : "
 	glog.V(4).Infof(logPrefix + "waiting for server response")
 
@@ -176,13 +178,13 @@ func (endpoint *ClientProtobufEndpoint) waitForSingleServerMessage() {
 // =====================================================================================
 // ---------------------------------------- Not used -----------------------------------
 type MessageWaiter interface {
-	getMessage(endpoint ProtobufEndpoint) goproto.Message
+	getMessage(endpoint ProtoBufEndpoint) goproto.Message
 }
 
 type SingleMessageWaiter struct {
 }
 
-func (messageWaiter *SingleMessageWaiter) getMessage(endpoint ProtobufEndpoint) {
+func (messageWaiter *SingleMessageWaiter) getMessage(endpoint ProtoBufEndpoint) {
 	go func() {
 		getSingleMessage(endpoint)
 	}()
@@ -191,7 +193,7 @@ func (messageWaiter *SingleMessageWaiter) getMessage(endpoint ProtobufEndpoint) 
 type ContinuousMessageWaiter struct {
 }
 
-func (messageWaiter *ContinuousMessageWaiter) getMessage(endpoint ProtobufEndpoint) {
+func (messageWaiter *ContinuousMessageWaiter) getMessage(endpoint ProtoBufEndpoint) {
 	go func() {
 		for {
 			getSingleMessage(endpoint)
@@ -199,7 +201,7 @@ func (messageWaiter *ContinuousMessageWaiter) getMessage(endpoint ProtobufEndpoi
 	}()
 }
 
-func getSingleMessage(endpoint ProtobufEndpoint) {
+func getSingleMessage(endpoint ProtoBufEndpoint) {
 	glog.V(4).Infof("[" + endpoint.GetName() + "][waitForSingleServerMessage]: ########## Waiting for server request #######")
 	// listen for server message
 	// - this will block till the message appears on the channel

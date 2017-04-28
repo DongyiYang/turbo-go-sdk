@@ -1,25 +1,28 @@
-package mediationcontainer
+package handler
 
 import (
 	"github.com/turbonomic/turbo-go-sdk/pkg/proto"
 	"github.com/turbonomic/turbo-go-sdk/pkg/version"
 
 	"github.com/golang/glog"
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/encoding"
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/transport"
+	"github.com/turbonomic/turbo-go-sdk/pkg/probe"
 )
 
 type SdkClientProtocol struct {
-	allProbes map[string]*ProbeProperties
+	allProbes map[string]*probe.ProbeProperties
 	//TransportReady chan bool
 }
 
-func CreateSdkClientProtocolHandler(allProbes map[string]*ProbeProperties) *SdkClientProtocol {
+func CreateSdkClientProtocolHandler(allProbes map[string]*probe.ProbeProperties) *SdkClientProtocol {
 	return &SdkClientProtocol{
 		allProbes: allProbes,
 		//TransportReady: done,
 	}
 }
 
-func (clientProtocol *SdkClientProtocol) handleClientProtocol(transport ITransport, transportReady chan bool) {
+func (clientProtocol *SdkClientProtocol) HandleClientProtocol(transport transport.ITransport, transportReady chan bool) {
 	glog.V(2).Infof("Starting Protocol Negotiation ....")
 	status := clientProtocol.NegotiateVersion(transport)
 
@@ -44,7 +47,7 @@ func (clientProtocol *SdkClientProtocol) handleClientProtocol(transport ITranspo
 
 // ============================== Protocol Version Negotiation =========================
 
-func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport ITransport) bool {
+func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport transport.ITransport) bool {
 	versionStr := string(proto.PROTOBUF_VERSION)
 	request := &version.NegotiationRequest{
 		ProtocolVersion: &versionStr,
@@ -52,11 +55,11 @@ func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport ITransport) 
 	glog.V(3).Infof("Send negotiation message: %+v", request)
 
 	// Create Protobuf Endpoint to send and handle negotiation messages
-	protoMsg := &NegotiationResponse{} // handler for the response
-	endpoint := CreateClientProtoBufEndpoint("NegotiationEndpoint", transport, protoMsg, true)
+	protoMsg := &encoding.NegotiationResponse{} // handler for the response
+	endpoint := encoding.CreateClientProtoBufEndpoint("NegotiationEndpoint", transport, protoMsg, true)
 
-	endMsg := &EndpointMessage{
-		ProtobufMessage: request,
+	endMsg := &encoding.EndpointMessage{
+		ProtoBufMessage: request,
 	}
 	endpoint.Send(endMsg)
 	//defer close(endpoint.MessageReceiver())
@@ -90,7 +93,7 @@ func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport ITransport) 
 
 // ======================= Registration ============================
 // Send registration message
-func (clientProtocol *SdkClientProtocol) HandleRegistration(transport ITransport) bool {
+func (clientProtocol *SdkClientProtocol) HandleRegistration(transport transport.ITransport) bool {
 	containerInfo, err := clientProtocol.MakeContainerInfo()
 	if err != nil {
 		glog.Error("Error creating ContainerInfo")
@@ -99,12 +102,12 @@ func (clientProtocol *SdkClientProtocol) HandleRegistration(transport ITransport
 
 	glog.V(3).Infof("Send registration message: %+v", containerInfo)
 
-	// Create Protobuf Endpoint to send and handle registration messages
-	protoMsg := &RegistrationResponse{}
-	endpoint := CreateClientProtoBufEndpoint("RegistrationEndpoint", transport, protoMsg, true)
+	// Create ProtoBuf Endpoint to send and handle registration messages
+	protoMsg := &encoding.RegistrationResponse{}
+	endpoint := encoding.CreateClientProtoBufEndpoint("RegistrationEndpoint", transport, protoMsg, true)
 
-	endMsg := &EndpointMessage{
-		ProtobufMessage: containerInfo,
+	endMsg := &encoding.EndpointMessage{
+		ProtoBufMessage: containerInfo,
 	}
 	endpoint.Send(endMsg)
 	//defer close(endpoint.MessageReceiver())

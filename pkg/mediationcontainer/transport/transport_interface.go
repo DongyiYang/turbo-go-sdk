@@ -1,4 +1,9 @@
-package mediationcontainer
+package transport
+
+
+type TransportConfig interface {
+	ValidateTransportConfig() error
+}
 
 // Transport endpoint that sends and receives raw message bytes
 type ITransport interface {

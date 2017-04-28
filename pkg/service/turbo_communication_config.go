@@ -9,6 +9,7 @@ import (
 	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer"
 
 	"github.com/golang/glog"
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/transport"
 )
 
 type RestAPIConfig struct {
@@ -26,9 +27,9 @@ func (rc *RestAPIConfig) ValidRestAPIConfig() error {
 
 // Configuration parameters for communicating with the Turbo server
 type TurboCommunicationConfig struct {
-	mediationcontainer.ServerMeta      `json:"serverMeta,omitempty"`
-	mediationcontainer.WebSocketConfig `json:"websocketConfig,omitempty"`
-	RestAPIConfig                      `json:"restAPIConfig,omitempty"`
+	mediationcontainer.ServerMeta `json:"serverMeta,omitempty"`
+	transport.TransportConfig     `json:"websocketConfig,omitempty"`
+	RestAPIConfig                 `json:"restAPIConfig,omitempty"`
 }
 
 func (turboCommConfig *TurboCommunicationConfig) ValidateTurboCommunicationConfig() error {
@@ -36,7 +37,7 @@ func (turboCommConfig *TurboCommunicationConfig) ValidateTurboCommunicationConfi
 	if err := turboCommConfig.ValidateServerMeta(); err != nil {
 		return err
 	}
-	if err := turboCommConfig.ValidateWebSocketConfig(); err != nil {
+	if err := turboCommConfig.ValidateTransportConfig(); err != nil {
 		return err
 	}
 	if err := turboCommConfig.ValidRestAPIConfig(); err != nil {

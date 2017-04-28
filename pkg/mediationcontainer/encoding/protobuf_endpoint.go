@@ -1,4 +1,4 @@
-package mediationcontainer
+package encoding
 
 import (
 	"fmt"
@@ -10,23 +10,13 @@ import (
 	goproto "github.com/golang/protobuf/proto"
 )
 
-// Endpoint to handle communication of a particular protobuf message type with the server
-type ProtobufEndpoint interface {
-	GetName() string
-	GetTransport() ITransport
-	CloseEndpoint()
-	Send(messageToSend *EndpointMessage)
-	GetMessageHandler() ProtobufMessage
-	MessageReceiver() chan *ParsedMessage
-}
-
 type EndpointMessage struct {
-	ProtobufMessage goproto.Message
+	ProtoBufMessage goproto.Message
 }
 
 // =====================================================================================
 // Parser interface for different server messages
-type ProtobufMessage interface {
+type ProtoBufMessage interface {
 	parse(rawMsg []byte) (*ParsedMessage, error)
 	GetMessage() goproto.Message
 }

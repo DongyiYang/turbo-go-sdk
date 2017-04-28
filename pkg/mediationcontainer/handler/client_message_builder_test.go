@@ -1,4 +1,4 @@
-package mediationcontainer
+package handler
 
 import (
 	"github.com/stretchr/testify/assert"

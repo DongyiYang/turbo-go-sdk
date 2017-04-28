@@ -1,4 +1,4 @@
-package mediationcontainer
+package transport
 
 import (
 	"testing"

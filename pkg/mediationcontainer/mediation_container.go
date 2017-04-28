@@ -13,19 +13,9 @@ type mediationContainer struct {
 	// Configuration for making the transport connection
 	containerConfig *MediationContainerConfig
 	// Map of probes registered with the container
-	allProbes map[string]*ProbeProperties
+	allProbes map[string]*probe.ProbeProperties
 	// The Mediation client that will handle the messages from the server
 	theRemoteMediationClient *remoteMediationClient
-}
-
-type ProbeSignature struct {
-	ProbeType     string
-	ProbeCategory string
-}
-
-type ProbeProperties struct {
-	ProbeSignature *ProbeSignature
-	Probe          *probe.TurboProbe
 }
 
 var (
@@ -37,7 +27,7 @@ func singletonMediationContainer() *mediationContainer {
 	once.Do(func() {
 		if theInstance == nil {
 			theInstance = &mediationContainer{
-				allProbes: make(map[string]*ProbeProperties),
+				allProbes: make(map[string]*probe.ProbeProperties),
 				// TODO: create the probe store and mediation client here
 			}
 		}
@@ -85,16 +75,16 @@ func CloseMediationContainer() {
 }
 
 // ============================= Probe Management ==================
-func LoadProbe(probe *probe.TurboProbe) error {
+func LoadProbe(turboProbe *probe.TurboProbe) error {
 	// load the probe config
-	config := &ProbeSignature{
-		ProbeCategory: probe.ProbeCategory,
-		ProbeType:     probe.ProbeType,
+	config := &probe.ProbeSignature{
+		ProbeCategory: turboProbe.ProbeCategory,
+		ProbeType:     turboProbe.ProbeType,
 	}
 
-	probeProp := &ProbeProperties{
+	probeProp := &probe.ProbeProperties{
 		ProbeSignature: config,
-		Probe:          probe,
+		Probe:          turboProbe,
 	}
 	theContainer := singletonMediationContainer()
 	if theContainer == nil {
@@ -106,20 +96,21 @@ func LoadProbe(probe *probe.TurboProbe) error {
 	return nil
 }
 
-func GetProbe(probeType string) (*probe.TurboProbe, error) {
-	theContainer := singletonMediationContainer()
-	if theContainer == nil {
-		return nil, errors.New("[GetProbe] Null mediation container")
-	}
-	probeProps := theContainer.allProbes[probeType]
-
-	if probeProps != nil {
-		probe := probeProps.Probe
-		registrationClient := probe.RegistrationClient
-		acctDefProps := registrationClient.GetAccountDefinition()
-		glog.V(2).Infof("Found "+probeProps.ProbeSignature.ProbeCategory+"::"+probeProps.ProbeSignature.ProbeType+" ==> ", acctDefProps)
-		return probe, nil
-	}
-	return nil, errors.New("[GetProbe] Cannot find Probe of type " + probeType)
-
-}
+//
+//func GetProbe(probeType string) (*probe.TurboProbe, error) {
+//	theContainer := singletonMediationContainer()
+//	if theContainer == nil {
+//		return nil, errors.New("[GetProbe] Null mediation container")
+//	}
+//	probeProps := theContainer.allProbes[probeType]
+//
+//	if probeProps != nil {
+//		turboProbe := probeProps.Probe
+//		registrationClient := turboProbe.RegistrationClient
+//		acctDefProps := registrationClient.GetAccountDefinition()
+//		glog.V(2).Infof("Found "+probeProps.ProbeSignature.ProbeCategory+"::"+probeProps.ProbeSignature.ProbeType+" ==> ", acctDefProps)
+//		return turboProbe, nil
+//	}
+//	return nil, errors.New("[GetProbe] Cannot find Probe of type " + probeType)
+//
+//}

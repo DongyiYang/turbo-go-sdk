@@ -1,4 +1,4 @@
-package mediationcontainer
+package transport
 
 import (
 	"crypto/tls"
@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/golang/glog"
@@ -20,29 +19,6 @@ const (
 )
 
 type TransportStatus string
-
-type WebSocketConnectionConfig MediationContainerConfig
-
-func CreateWebSocketConnectionConfig(connConfig *MediationContainerConfig) (*WebSocketConnectionConfig, error) {
-	_, err := url.ParseRequestURI(connConfig.LocalAddress)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse local URL from %s when create WebSocketConnectionConfig.", connConfig.LocalAddress)
-	}
-	// Change URL scheme from ws to http or wss to https.
-	serverURL, err := url.ParseRequestURI(connConfig.TurboServer)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse turboServer URL from %s when create WebSocketConnectionConfig.", connConfig.TurboServer)
-	}
-	switch serverURL.Scheme {
-	case "http":
-		serverURL.Scheme = "ws"
-	case "https":
-		serverURL.Scheme = "wss"
-	}
-	wsConfig := WebSocketConnectionConfig(*connConfig)
-	wsConfig.TurboServer = serverURL.String()
-	return &wsConfig, nil
-}
 
 // ============================ ClientWebSocketTransport - Start, Connect, Close ======================================
 // Implementation of the ITransport for WebSocket communication to send and receive serialized protobuf message bytes
@@ -226,7 +202,7 @@ func (clientTransport *ClientWebSocketTransport) performWebSocketConnection() er
 	connRetryIntervalSeconds := time.Second * 30 // TODO: use ConnectionRetry parameter from the connConfig or default
 	connConfig := clientTransport.connConfig
 	// WebSocket URL
-	vmtServerUrl := connConfig.TurboServer + connConfig.WebSocketPath
+	vmtServerUrl := connConfig.turboServer + connConfig.WebSocketPath
 	glog.Infof("[performWebSocketConnection]: %s", vmtServerUrl)
 
 	for !clientTransport.closeRequested { // only set when CloseTransportPoint() is called
