@@ -115,7 +115,6 @@ func (remoteMediationClient *remoteMediationClient) Init(probeRegisteredMsgCh ch
 		} // end for
 	}() // end go routine
 	err = transportLayer.Connect() // TODO: blocks till websocket connection is open or until transport is closed
-
 	// handle WebSocket creation errors
 	if err != nil { //transport.ws == nil {
 		glog.Errorf("Initialization of remote mediation client failed, null transport")

@@ -16,6 +16,9 @@ import (
 const (
 	Closed TransportStatus = "closed"
 	Ready  TransportStatus = "ready"
+
+	// TODO: expose a parameter in config.
+	connRetryIntervalSeconds time.Duration = time.Second * 30
 )
 
 type TransportStatus string
@@ -24,10 +27,13 @@ type TransportStatus string
 // Implementation of the ITransport for WebSocket communication to send and receive serialized protobuf message bytes
 type ClientWebSocketTransport struct {
 	// current status of the transport layer.
-	status                   TransportStatus
-	ws                       *websocket.Conn // created during Connect()
-	connConfig               *WebSocketConnectionConfig
-	inputStreamCh            chan []byte // unbuffered channel
+	status     TransportStatus
+	ws         *websocket.Conn // created during Connect()
+	connConfig *WebSocketConnectionConfig
+
+	inputStreamCh    chan []byte // unbuffered channel for message received from WebSocket server.
+	outgoingStreamCh chan []byte // unbuffered channel for message to be sent to WebSocket server.
+
 	closeRequested           bool
 	stopListenerCh           chan bool // buffered channel
 	connClosedNotificationCh chan bool // channel where the transport connection error will be notified
@@ -57,7 +63,8 @@ func (clientTransport *ClientWebSocketTransport) Connect() error {
 	glog.V(4).Infof("[Connect] Connected to server " + clientTransport.GetConnectionId())
 
 	clientTransport.stopListenerCh = make(chan bool, 1) // Channel to stop the routine that listens for messages
-	clientTransport.inputStreamCh = make(chan []byte)   // Message Queue
+	clientTransport.inputStreamCh = make(chan []byte)   // Incoming message queue
+
 	// Message handler for received messages
 	clientTransport.ListenForMessages() // spawns a new routine
 	return nil
@@ -105,8 +112,8 @@ func (clientTransport *ClientWebSocketTransport) stopListenForMessages() {
 	}
 }
 
-// Routine to listen for messages on the websocket.
-// The websocket is continuously checked for messages and queued on the clientTransport.inputStream channel
+// Routine to listen for messages on the WebSocket.
+// The WebSocket is continuously checked for messages and queued on the clientTransport.inputStream channel
 // Routine exits when a message is sent on clientTransport.stopListenerCh.
 //
 func (clientTransport *ClientWebSocketTransport) ListenForMessages() {
@@ -114,13 +121,11 @@ func (clientTransport *ClientWebSocketTransport) ListenForMessages() {
 
 	go func() {
 		for {
-			glog.V(4).Info("[ListenForMessages] waiting for messages on websocket transport")
-			glog.V(4).Infof("[ListenForMessages] waiting for messages on websocket transport : %++v", clientTransport)
+			glog.V(4).Info("[ListenForMessages] waiting for messages on WebSocket transport")
 			select {
 			case <-clientTransport.stopListenerCh:
-				glog.V(3).Infof("[ListenForMessages] closing inputStreamCh %+v", clientTransport.inputStreamCh)
 				close(clientTransport.inputStreamCh) // This listener routine is the writer for this channel
-				glog.V(3).Infof("[ListenForMessages] closed inputStreamCh %+v", clientTransport.inputStreamCh)
+				glog.V(3).Infof("[ListenForMessages] closed incoming message queue.")
 				return
 			default:
 				if clientTransport.status != Ready {
@@ -128,7 +133,7 @@ func (clientTransport *ClientWebSocketTransport) ListenForMessages() {
 					glog.Errorf("WebSocket is not ready.")
 					continue
 				}
-				glog.V(2).Infof("[ListenForMessages]: connected, waiting for server response ...")
+				glog.V(2).Infof("[ListenForMessages]: ready, waiting for server response ...")
 				var data []byte = make([]byte, 1024)
 				err := websocket.Message.Receive(clientTransport.ws, &data)
 				// Notify errors and break
@@ -169,18 +174,18 @@ func (clientTransport *ClientWebSocketTransport) RawMessageReceiver() chan []byt
 }
 
 // ==================================================== Message Sender ===============================================
-// Send serialized protobuf message bytes
+// Send out message to WebSocket server.
 func (clientTransport *ClientWebSocketTransport) Send(messageToSend *TransportMessage) error {
 	if clientTransport.closeRequested {
-		glog.Errorf("Cannot send message : transport endpoint is closed")
+		glog.Errorf("Cannot send message : transport endpoint is closed.")
 		return errors.New("Cannot send message: transport endpoint is closed")
 	}
 
 	if clientTransport.status != Ready {
 		glog.Errorf("WebSocket transport layer status is %s", clientTransport.status)
-		return errors.New("Cannot send message: web socket is not ready")
+		return errors.New("Cannot send message: WebSocket client is not ready")
 	}
-	if messageToSend == nil { //.RawMsg == nil {
+	if messageToSend == nil {
 		glog.Errorf("Cannot send message : marshalled msg is nil")
 		return errors.New("Cannot send message: marshalled msg is nil")
 	}
@@ -196,27 +201,25 @@ func (clientTransport *ClientWebSocketTransport) Send(messageToSend *TransportMe
 	return nil
 }
 
-// ====================================== Websocket Connection =========================================================
-// Establish connection to server websocket until connected or until the transport endpoint is closed
+// ====================================== WebSocket Connection =========================================================
+// Establish connection to WebSocket server until connected or the transport endpoint is explicitly closed.
 func (clientTransport *ClientWebSocketTransport) performWebSocketConnection() error {
-	connRetryIntervalSeconds := time.Second * 30 // TODO: use ConnectionRetry parameter from the connConfig or default
 	connConfig := clientTransport.connConfig
 	// WebSocket URL
 	vmtServerUrl := connConfig.turboServer + connConfig.WebSocketPath
-	glog.Infof("[performWebSocketConnection]: %s", vmtServerUrl)
+	glog.V(2).Infof("[performWebSocketConnection]: Connecting to %s.", vmtServerUrl)
 
 	for !clientTransport.closeRequested { // only set when CloseTransportPoint() is called
 		ws, err := openWebSocketConn(connConfig, vmtServerUrl)
-
 		if err != nil {
 			// print at debug level after some time
-			glog.V(3).Infof("[performWebSocketConnection] %v : unable to connect to %s. Retrying in %v\n", time.Now(), vmtServerUrl, connRetryIntervalSeconds)
-
+			glog.V(3).Infof("[performWebSocketConnection] %v : unable to connect to %s. Retrying in %v.",
+				time.Now(), vmtServerUrl, connRetryIntervalSeconds)
 			time.Sleep(connRetryIntervalSeconds)
 		} else {
 			clientTransport.ws = ws
 			clientTransport.status = Ready
-			glog.V(2).Infof("[performWebSocketConnection]*********** Connected to server " + clientTransport.GetConnectionId())
+			glog.V(2).Infof("[performWebSocketConnection]Connected to server %s", clientTransport.GetConnectionId())
 			glog.V(2).Infof("WebSocket transport layer is ready.")
 
 			return nil
@@ -226,6 +229,7 @@ func (clientTransport *ClientWebSocketTransport) performWebSocketConnection() er
 	return errors.New("Abort client socket connect, transport is closed")
 }
 
+// Establish a WebSocket connection to the given server URL with the given config.
 func openWebSocketConn(connConfig *WebSocketConnectionConfig, vmtServerUrl string) (*websocket.Conn, error) {
 	config, err := websocket.NewConfig(vmtServerUrl, connConfig.LocalAddress)
 	if err != nil {
@@ -235,11 +239,13 @@ func openWebSocketConn(connConfig *WebSocketConnectionConfig, vmtServerUrl strin
 	usrpasswd := []byte(connConfig.WebSocketUsername + ":" + connConfig.WebSocketPassword)
 
 	config.Header = http.Header{
-		"Authorization": {"Basic " + base64.StdEncoding.EncodeToString(usrpasswd)},
+		"Authorization": {
+			fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(usrpasswd)),
+		},
 	}
 	config.TlsConfig = &tls.Config{InsecureSkipVerify: true}
-	webs, err := websocket.DialConfig(config)
 
+	webs, err := websocket.DialConfig(config)
 	if err != nil {
 		glog.Error(err)
 		if webs == nil {

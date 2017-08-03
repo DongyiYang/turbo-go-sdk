@@ -1,13 +1,13 @@
 package handler
 
 import (
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/encoding"
+	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/transport"
+	"github.com/turbonomic/turbo-go-sdk/pkg/probe"
 	"github.com/turbonomic/turbo-go-sdk/pkg/proto"
 	"github.com/turbonomic/turbo-go-sdk/pkg/version"
 
 	"github.com/golang/glog"
-	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/encoding"
-	"github.com/turbonomic/turbo-go-sdk/pkg/mediationcontainer/transport"
-	"github.com/turbonomic/turbo-go-sdk/pkg/probe"
 )
 
 type SdkClientProtocol struct {
@@ -55,7 +55,7 @@ func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport transport.IT
 	glog.V(3).Infof("Send negotiation message: %+v", request)
 
 	// Create Protobuf Endpoint to send and handle negotiation messages
-	protoMsg := &encoding.NegotiationResponse{} // handler for the response
+	protoMsg := &encoding.NegotiationResponseParser{} // handler for the response
 	endpoint := encoding.CreateClientProtoBufEndpoint("NegotiationEndpoint", transport, protoMsg, true)
 
 	endMsg := &encoding.EndpointMessage{
@@ -73,7 +73,7 @@ func (clientProtocol *SdkClientProtocol) NegotiateVersion(transport transport.IT
 	glog.V(3).Infof("["+endpoint.GetName()+"] : Received: %s\n", serverMsg)
 
 	// Handler response
-	negotiationResponse := protoMsg.NegotiationMsg
+	negotiationResponse := protoMsg.NegotiationResponse
 	if negotiationResponse == nil {
 		glog.Error("Probe Protocol failed, null negotiation response")
 		endpoint.CloseEndpoint()
